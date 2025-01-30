@@ -1,0 +1,16 @@
+// main.scss
+@import "bootstrap/scss/bootstrap";
+
+.form-container {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.report-card {
+  background: #fff;
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
