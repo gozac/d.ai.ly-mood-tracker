@@ -1,7 +1,7 @@
 // src/App.jsx
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+//import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/layout/Navbar';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
@@ -12,7 +12,7 @@ import './styles/main.scss';
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
+    <div>
       <BrowserRouter>
         <Navbar />
         <div className="container">
@@ -38,7 +38,7 @@ const App: React.FC = () => {
           </Routes>
         </div>
       </BrowserRouter>
-    </AuthProvider>
+    </div>
   );
 };
 

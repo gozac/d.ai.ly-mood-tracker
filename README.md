@@ -30,5 +30,6 @@ Une application web permettant aux utilisateurs de suivre leur humeur quotidienn
 
 1. **Cloner le repository**
 ```bash
-git clone https://github.com/gozac/daily-mood-tracker
+git clone https://github.com/gozac/d.ai.ly-mood-tracker
 cd daily-mood-tracker
+
