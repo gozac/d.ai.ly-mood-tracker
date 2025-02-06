@@ -1,11 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_login import LoginManager, login_user, login_required, current_user
+from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_required
 from werkzeug.security import check_password_hash
 from models import User
 from database import init_db
 from ai_service import generate_summary, generate_evaluation
-import sqlite3
+import sqlite3, json
 from datetime import datetime
 
 app = Flask(__name__)
@@ -14,6 +15,8 @@ CORS(app, supports_credentials=True)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+jwt = JWTManager(app)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -27,9 +30,18 @@ def register():
     
     if not username or not password:
         return jsonify({"error": "Missing credentials"}), 400
-        
-    if User.create(username, password):
-        return jsonify({"message": "User created successfully"}), 201
+    
+    user = User.create(username, password)
+    if user:
+        access_token = create_access_token(identity=user[0])
+        return jsonify({
+            "message": "User created successfully",
+            "token": access_token,
+            "user": {
+                "id": user[0],
+                "username": user[1]
+            }
+            }), 201
     else:
         return jsonify({"error": "Username already exists"}), 409
 
@@ -47,9 +59,48 @@ def login():
     if user and check_password_hash(user[2], password):
         user_obj = User(user[0], user[1], user[2])
         login_user(user_obj)
-        return jsonify({"message": "Logged in successfully"}), 200
+        # Créer le token JWT
+        access_token = create_access_token(identity=user[0])
+
+        return jsonify({
+            "message": "Logged in successfully",
+            "token": access_token,
+            "user": {
+                "id": user[0],
+                "username": user[1]
+            }
+        }), 200
     
     return jsonify({"error": "Invalid credentials"}), 401
+
+@app.route("/verify-token", methods=["GET"])
+@jwt_required()
+def verify_token():
+    current_user_id = get_jwt_identity()
+    
+    # Récupérer les informations de l'utilisateur depuis la base de données
+    conn = sqlite3.connect('instance/database.sqlite')
+    c = conn.cursor()
+    user = c.execute('SELECT * FROM users WHERE id = ?', (current_user_id,)).fetchone()
+    conn.close()
+    
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    return jsonify({
+        "message": "Token is valid",
+        "user": {
+            "id": user[0],
+            "username": user[1]
+        }
+    }), 200
+
+@app.route("/refresh-token", methods=["POST"])
+@jwt_required(refresh=True)
+def refresh_token():
+    current_user_id = get_jwt_identity()
+    new_token = create_access_token(identity=current_user_id)
+    return jsonify({"token": new_token}), 200
 
 @app.route("/submit-report", methods=["POST"])
 @login_required
@@ -104,7 +155,7 @@ def get_today_report():
     c = conn.cursor()
     
     report = c.execute(
-        '''SELECT r.answers, r.summary, e.content 
+        '''SELECT r.answers, r.summary, e.content, r.date 
            FROM reports r 
            LEFT JOIN evaluations e ON e.user_id = r.user_id 
            WHERE r.user_id = ? AND r.date = ?''',
@@ -115,6 +166,7 @@ def get_today_report():
     
     if report:
         return jsonify({
+            "date": report[3],
             "answers": json.loads(report[0]),
             "summary": report[1],
             "evaluation": report[2]

@@ -1,15 +1,43 @@
-// src/components/form/DailyForm.jsx
+// src/components/form/DailyForm.tsx
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { DailyAnswers, Question } from '../../types';
 import QuestionComponent from './Question';
 import { submitReport } from '../../services/api';
+import * as yup from 'yup';
+import { yupResolver } from '@hookform/resolvers/yup';
+
+
+// Type guard function to check if a string is a key of DailyAnswers
+function isKeyOfDailyAnswers(key: string): key is keyof DailyAnswers {
+  return ['q1', 'q2', 'q3'].includes(key);
+}
+
+const schema = yup.object().shape({
+  q1: yup.string().required('Ce champ est requis'),
+  q2: yup.string().required('Ce champ est requis'),
+  q3: yup.string().required('Ce champ est requis'),
+  mood: yup.string().required('Veuillez sélectionner une humeur')
+}) as yup.ObjectSchema<DailyAnswers>;
+
 
 const DailyForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { register, handleSubmit, formState: { errors } } = useForm<DailyAnswers>();
 
-  const questions: Question[] = [
+    const moods = [
+    '😊 Heureux',
+    '😢 Triste', 
+    '😴 Fatigué',
+    '😡 Frustré',
+    '🤩 Excité'
+  ];
+
+
+  const { register, handleSubmit, control, formState: { errors } } = useForm<DailyAnswers>({
+    resolver: yupResolver(schema)
+  });
+
+  const questions: Array<{ id: keyof DailyAnswers; text: string }> = [
     { id: 'q1', text: "Comment s'est passée votre journée ?" },
     { id: 'q2', text: "Qu'avez-vous accompli aujourd'hui ?" },
     { id: 'q3', text: "Comment vous sentez-vous ce soir ?" }
@@ -26,15 +54,47 @@ const DailyForm: React.FC = () => {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
-      {questions.map(q => (
-        <QuestionComponent
-          key={q.id}
-          question={q.text}
-          id={q.id}
-          register={register}
-          error={errors[q.id]?.message}
+      {questions.map(q => {
+        if (!isKeyOfDailyAnswers(q.id)) return null;
+        return (
+          <QuestionComponent
+            key={q.id}
+            question={q.text}
+            id={q.id}
+            register={register}
+            error={errors[q.id]?.message}
+          />
+        );
+      })}
+
+      <br/>
+
+      {/* Nouveau composant de sélection d'humeur */}
+      <div className="mood-selector">
+        <h3>Comment vous sentez-vous ?</h3>
+        <Controller
+          name="mood"
+          control={control}
+          render={({ field }) => (
+            <div className="mood-buttons">
+              {moods.map((mood, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => field.onChange(mood)}
+                  className={field.value === mood ? 'selected' : ''}
+                >
+                  {mood}
+                </button>
+              ))}
+            </div>
+          )}
         />
-      ))}
+        {errors.mood && <p className="error">{errors.mood.message}</p>}
+      </div>
+
+      <br/>
+
       <button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Envoi...' : 'Envoyer'}
       </button>

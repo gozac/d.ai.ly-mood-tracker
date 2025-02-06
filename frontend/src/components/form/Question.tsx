@@ -1,11 +1,11 @@
-// src/components/form/Question.jsx
+// src/components/form/Question.tsx
 import React from 'react';
 import { UseFormRegister } from 'react-hook-form';
 import { DailyAnswers } from '../../types';
 
 interface QuestionProps {
   question: string;
-  id: string;
+  id: keyof DailyAnswers;
   register: UseFormRegister<DailyAnswers>;
   error?: string;
 }

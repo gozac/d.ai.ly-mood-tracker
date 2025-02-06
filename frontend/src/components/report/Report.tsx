@@ -1,8 +1,10 @@
+// src/components/report/Report.tsx
 import React, { useEffect, useState } from 'react';
 import { Report as ReportType } from '../../types';
 import { getTodayReport } from '../../services/api';
 import Evaluation from './Evaluation';
-import './Report.scss';
+import axios from 'axios'
+//import './Report.scss';
 
 const Report: React.FC = () => {
   const [report, setReport] = useState<ReportType | null>(null);
@@ -12,10 +14,15 @@ const Report: React.FC = () => {
   useEffect(() => {
     const fetchReport = async () => {
       try {
+        setLoading(true);
         const data = await getTodayReport();
         setReport(data);
       } catch (err) {
-        setError('Erreur lors du chargement du rapport');
+        if (axios.isAxiosError(err)) {
+          setError(err.response?.data?.message || 'Erreur lors du chargement du rapport');
+        } else {
+          setError('Une erreur inattendue est survenue');
+        }
       } finally {
         setLoading(false);
       }
@@ -47,24 +54,24 @@ const Report: React.FC = () => {
       {report ? (
         <>
           <div className="report-header">
-            <h2>Rapport du {new Date(report.date).toLocaleDateString()}</h2>
+            <h2>Rapport du {new Date(report.date).toLocaleDateString('fr-FR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            })}</h2>
           </div>
+
+          <br />
           
           <div className="report-content">
-            <div className="report-answers">
-              <h3>Vos réponses</h3>
-              {Object.entries(report.answers).map(([question, answer]) => (
-                <div key={question} className="answer-item">
-                  <strong>{question}:</strong>
-                  <p>{answer}</p>
-                </div>
-              ))}
-            </div>
 
             <div className="report-summary">
               <h3>Résumé</h3>
               <p>{report.summary}</p>
             </div>
+
+            <br />
 
             {report.evaluation && <Evaluation evaluation={report.evaluation} />}
           </div>

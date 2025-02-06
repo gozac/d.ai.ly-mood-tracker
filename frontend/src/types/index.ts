@@ -10,7 +10,10 @@ export interface Question {
 }
 
 export interface DailyAnswers {
-  [key: string]: string;
+  q1: string;
+  q2: string;
+  q3: string;
+  mood: string;
 }
 
 export interface Report {

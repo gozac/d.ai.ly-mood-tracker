@@ -10,6 +10,21 @@ class User(UserMixin):
         self.username = username
         self.password_hash = password_hash
 
+    @property
+    def is_active(self):
+        return True
+    
+    @property
+    def is_authenticated(self):
+        return True
+    
+    @property
+    def is_anonymous(self):
+        return False
+    
+    def get_id(self):
+        return str(self.id)
+
     @staticmethod
     def get(user_id):
         conn = sqlite3.connect('instance/database.sqlite')

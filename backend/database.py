@@ -3,6 +3,7 @@ from datetime import datetime
 
 def init_db():
     conn = sqlite3.connect('instance/database.sqlite')
+
     c = conn.cursor()
     
     # Création des tables
