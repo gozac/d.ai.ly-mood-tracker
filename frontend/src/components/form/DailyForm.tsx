@@ -1,11 +1,12 @@
 // src/components/form/DailyForm.tsx
 import React, { useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
-import { DailyAnswers, Question } from '../../types';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { DailyAnswers, Question, Objective } from '../../types';
 import QuestionComponent from './Question';
 import { submitReport } from '../../services/api';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
+import ObjectivesManager from './ObjectivesManager';
 
 
 // Type guard function to check if a string is a key of DailyAnswers
@@ -17,14 +18,20 @@ const schema = yup.object().shape({
   q1: yup.string().required('Ce champ est requis'),
   q2: yup.string().required('Ce champ est requis'),
   q3: yup.string().required('Ce champ est requis'),
-  mood: yup.string().required('Veuillez sélectionner une humeur')
+  mood: yup.string().required('Veuillez sélectionner une humeur'),
+  objectives: yup.array().of(
+    yup.object().shape({
+      title: yup.string().required('Le titre de l\'objectif est requis')
+    })
+  )
 }) as yup.ObjectSchema<DailyAnswers>;
 
 
 const DailyForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formObjectives, setFormObjectives] = useState<Objective[]>([]); //maybe useState<Objective[]>([]);
 
-    const moods = [
+  const moods = [
     '😊 Heureux',
     '😢 Triste', 
     '😴 Fatigué',
@@ -33,8 +40,15 @@ const DailyForm: React.FC = () => {
   ];
 
 
+
   const { register, handleSubmit, control, formState: { errors } } = useForm<DailyAnswers>({
     resolver: yupResolver(schema)
+  });
+
+  // Gestion dynamique des objectifs
+  const { fields, append, remove, update } = useFieldArray({
+    control,
+    name: 'objectives'
   });
 
   const questions: Array<{ id: keyof DailyAnswers; text: string }> = [
@@ -42,6 +56,11 @@ const DailyForm: React.FC = () => {
     { id: 'q2', text: "Qu'avez-vous accompli aujourd'hui ?" },
     { id: 'q3', text: "Comment vous sentez-vous ce soir ?" }
   ];
+
+
+  const handleObjectivesChange = (objectives: Objective[]) => {
+    setFormObjectives(objectives);
+  };
 
   const onSubmit = async (data: DailyAnswers) => {
     setIsSubmitting(true);
@@ -69,7 +88,10 @@ const DailyForm: React.FC = () => {
 
       <br/>
 
-      {/* Nouveau composant de sélection d'humeur */}
+      <ObjectivesManager onObjectivesChange={handleObjectivesChange} />
+
+      <br/>
+
       <div className="mood-selector">
         <h3>Comment vous sentez-vous ?</h3>
         <Controller

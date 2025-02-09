@@ -1,6 +1,6 @@
 // src/services/api.ts
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
-import { DailyAnswers, Report } from '../types';
+import { DailyAnswers, Report, Objective } from '../types';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -55,6 +55,45 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const fetchUserObjectives = async (): Promise<Objective[]> => {
+  try {
+    const { data } = await api.get<Objective[]>('/get-goals');
+    return data;
+  } catch (error) {
+    console.error('Erreur lors de la récupération des objectifs', error);
+    return [];
+  }
+};
+
+export const createObjective = async (objective: Omit<Objective, 'id'>): Promise<Objective> => {
+  try {
+    const { data } = await api.post<Objective>('/add-goal', { objective });
+    return data;
+  } catch (error) {
+    console.error('Erreur lors de la création de l\'objectif', error);
+    throw error;
+  }
+};
+
+export const updateObjective = async (id: string, objective: Partial<Objective>): Promise<Objective> => {
+  try {
+    const { data } = await api.post<Objective>(`/update-goal/${id}`, { objective });
+    return data;
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour de l\'objectif', error);
+    throw error;
+  }
+};
+
+export const deleteObjective = async (id: string): Promise<void> => {
+  try {
+    await api.delete(`/delete-goal/${id}`);
+  } catch (error) {
+    console.error('Erreur lors de la suppression de l\'objectif', error);
+    throw error;
+  }
+};
 
 
 export const submitReport = async (answers: DailyAnswers): Promise<Report> => {

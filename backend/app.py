@@ -174,6 +174,135 @@ def get_today_report():
     
     return jsonify({"message": "No report found for today"}), 404
 
+@app.route("/add-goal", methods=["POST"])
+@login_required
+def add_goal():
+    data = request.json
+    objective = data.get('objective')
+    title = objective.get('title')
+    
+    if not title:
+        return jsonify({"error": "Goal title is required"}), 400
+    
+    conn = sqlite3.connect('instance/database.sqlite')
+    c = conn.cursor()
+    
+    try:
+        c.execute(
+            'INSERT INTO goals (user_id, title) VALUES (?, ?)',
+            (current_user.id, title)
+        )
+        goal_id = c.lastrowid
+        conn.commit()
+        
+        return jsonify({
+            "message": "Goal added successfully",
+            "goal": {
+                "id": goal_id,
+                "title": title,
+                "status": "active"
+            }
+        }), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route("/get-goals", methods=["GET"])
+@login_required
+def get_goals():
+    conn = sqlite3.connect('instance/database.sqlite')
+    c = conn.cursor()
+    
+    # Optionally filter by status
+    status = request.args.get('status', 'active')
+    
+    goals = c.execute(
+        'SELECT id, title, description, status, target_date FROM goals WHERE user_id = ? AND status = ?', 
+        (current_user.id, status)
+    ).fetchall()
+    
+    conn.close()
+    
+    # Convert to list of dictionaries
+    goals_list = [{
+        "id": goal[0],
+        "title": goal[1],
+        "description": goal[2],
+        "status": goal[3],
+        "target_date": goal[4]
+    } for goal in goals]
+    
+    return jsonify(goals_list), 200
+
+@app.route("/update-goal/<int:goal_id>", methods=["PUT"])
+@login_required
+def update_goal(goal_id):
+    data = request.json
+    
+    conn = sqlite3.connect('instance/database.sqlite')
+    c = conn.cursor()
+    
+    # Verify goal belongs to current user
+    goal = c.execute(
+        'SELECT * FROM goals WHERE id = ? AND user_id = ?', 
+        (goal_id, current_user.id)
+    ).fetchone()
+    
+    if not goal:
+        conn.close()
+        return jsonify({"error": "Goal not found"}), 404
+    
+    # Update fields
+    title = data.get('title', goal[2])
+    status = data.get('status', goal[4])
+    
+    try:
+        c.execute(
+            '''UPDATE goals 
+               SET title = ?, status = ?
+               WHERE id = ?''',
+            (title, status, goal_id)
+        )
+        conn.commit()
+        
+        return jsonify({
+            "message": "Goal updated successfully",
+            "goal": {
+                "id": goal_id,
+                "title": title,
+                "status": status
+            }
+        }), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route("/delete-goal/<int:goal_id>", methods=["DELETE"])
+@login_required
+def delete_goal(goal_id):
+    conn = sqlite3.connect('instance/database.sqlite')
+    c = conn.cursor()
+    
+    try:
+        # First, verify the goal belongs to the current user
+        c.execute('DELETE FROM goals WHERE id = ? AND user_id = ?', (goal_id, current_user.id))
+        
+        if c.rowcount == 0:
+            conn.close()
+            return jsonify({"error": "Goal not found or not authorized"}), 404
+        
+        conn.commit()
+        return jsonify({"message": "Goal deleted successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
 if __name__ == "__main__":
     init_db()
     app.run(debug=True)

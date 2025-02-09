@@ -9,11 +9,18 @@ export interface Question {
   text: string;
 }
 
+export interface Objective {
+  id: string;
+  title: string;
+  isCompleted?: boolean;
+}
+
 export interface DailyAnswers {
   q1: string;
   q2: string;
   q3: string;
   mood: string;
+  objectives: Objective[];
 }
 
 export interface Report {
