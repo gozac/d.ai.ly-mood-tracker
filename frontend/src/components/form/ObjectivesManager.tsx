@@ -25,6 +25,7 @@ const ObjectivesManager: React.FC<ObjectivesManagerProps> = ({ onObjectivesChang
     };
 
     loadObjectives();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Ajouter un nouvel objectif

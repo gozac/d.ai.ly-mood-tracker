@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, Link } from 'react-router-dom';
-import { loginUser } from '../../services/auth';
 import { useAuth } from '../../context/AuthContext';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -18,7 +17,7 @@ const schema = yup.object().shape({
 });
 
 const Login: React.FC = () => {
-  const [error, setError] = useState<string>('');
+  const [error] = useState<string>(''); // Deprecated , setError
   const { 
     register, 
     handleSubmit, 
@@ -32,10 +31,10 @@ const Login: React.FC = () => {
 
   // Rediriger si déjà authentifié
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !isLoggingIn) {
       navigate('/form');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, isLoggingIn]);
 
   const onSubmit = async (data: LoginFormInputs) => {
     try {

@@ -2,7 +2,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { User } from '../types';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 export const api: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -20,6 +20,7 @@ interface Credentials {
   password: string;
 }
 
+// Deprecated
 export const loginUser = async (credentials: Credentials): Promise<User> => {
   const { data } = await api.post<AuthResponse>('/login', credentials);
   if (data.token) {

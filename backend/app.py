@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response, redirect
 from flask_cors import CORS
 from flask_login import LoginManager, login_user, login_required, current_user
 from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_required
@@ -11,7 +11,28 @@ from datetime import datetime
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
-CORS(app, supports_credentials=True)
+
+app.config.update(
+    SESSION_COOKIE_SECURE=True,  # Pour HTTPS seulement
+    SESSION_COOKIE_SAMESITE='None',  # Permet les requêtes cross-site
+    SESSION_COOKIE_HTTPONLY=True,  # Empêche l'accès JS au cookie
+)
+CORS(app, 
+     resources={r"/*": {
+         "origins": ["https://localhost:3000", "http://localhost:3000", app.config["FRONTEND_URL"]],
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         "allow_headers": [
+            "Content-Type",
+            "Authorization",
+            "Access-Control-Allow-Headers",
+            "Access-Control-Allow-Origin",
+            "Access-Control-Allow-Methods",
+            "Access-Control-Allow-Credentials",
+            "X-Requested-With"
+         ],
+         "supports_credentials": True,
+         "expose_headers": ["Content-Range", "X-Content-Range"]
+     }})
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -72,6 +93,38 @@ def login():
         }), 200
     
     return jsonify({"error": "Invalid credentials"}), 401
+
+
+#do a new preflight on /* method
+
+
+def _build_cors_preflight_response():
+    response = make_response()
+    response.headers.add("Access-Control-Allow-Origin", app.config["FRONTEND_URL"])
+    response.headers.add('Access-Control-Allow-Headers', "Authorization, Content-Type, same-site")
+    response.headers.add('Access-Control-Allow-Methods', "GET, POST, PUT, DELETE")
+    response.headers.add('Access-Control-Allow-Credentials', "true")
+    response.headers.add('Access-Control-Max-Age', "600")
+    response.headers.add('Access-Control-Allow-Private-Network', "true")
+    return response
+
+def _corsify_actual_response(response):
+    response.headers.add("Access-Control-Allow-Origin", "https://localhost:3000")
+    return response
+
+@app.before_request
+def handle_request():
+    #session.permanent = True
+    #app.config['SESSION_COOKIE_SECURE'] = False
+    if request.method == "OPTIONS": # CORS preflight
+        print("preflight baby");
+        return _build_cors_preflight_response()
+    if request.headers.get('X-Forwarded-Proto', 'http') == 'https':
+        # Force HTTP pour le réseau privé
+        print("weird")
+        #url = request.url.replace('https://', 'http://', 1)
+        #return redirect(url, code=301)
+
 
 @app.route("/verify-token", methods=["GET"])
 @jwt_required()
@@ -212,6 +265,7 @@ def add_goal():
 @app.route("/get-goals", methods=["GET"])
 @login_required
 def get_goals():
+    print("gogogogo")
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
     
@@ -305,4 +359,4 @@ def delete_goal(goal_id):
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True)
+    app.run(host='::', port=5000, ssl_context=None, debug=True)

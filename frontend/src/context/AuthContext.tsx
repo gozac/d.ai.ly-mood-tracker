@@ -14,11 +14,11 @@ interface AuthContextType {
   error: string | null;
 }
 
-// Interface pour le token décodé
-interface DecodedToken {
+// Interface pour le token décodé -- Deprecated
+/*interface DecodedToken {
   exp: number;
   user_id: number;
-}
+}*/
 
 // Création du contexte
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -135,7 +135,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   );
 };
 
-// Ajouter la gestion du rafraîchissement du token
+/* Ajouter la gestion du rafraîchissement du token -- Deprecated ?
 const refreshToken = async () => {
   try {
     const response = await api.post('/refresh-token');
@@ -145,7 +145,7 @@ const refreshToken = async () => {
   } catch (error) {
     //logout();
   }
-};
+};*/
 
 // Hook personnalisé pour utiliser le contexte
 export const useAuth = () => {

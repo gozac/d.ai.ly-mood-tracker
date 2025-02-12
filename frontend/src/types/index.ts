@@ -4,6 +4,8 @@ export interface User {
   username: string;
 }
 
+
+// Deprecated
 export interface Question {
   id: string;
   text: string;

@@ -1,7 +1,7 @@
 // src/components/form/DailyForm.tsx
 import React, { useState } from 'react';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
-import { DailyAnswers, Question, Objective } from '../../types';
+import { useForm, Controller } from 'react-hook-form';
+import { DailyAnswers, Objective } from '../../types';
 import QuestionComponent from './Question';
 import { submitReport } from '../../services/api';
 import * as yup from 'yup';
@@ -29,7 +29,7 @@ const schema = yup.object().shape({
 
 const DailyForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formObjectives, setFormObjectives] = useState<Objective[]>([]); //maybe useState<Objective[]>([]);
+  const [formObjectives, setFormObjectives] = useState<Objective[]>([]); //maybe useState<Objective[]>([]); but deprecated
 
   const moods = [
     '😊 Heureux',
@@ -45,11 +45,11 @@ const DailyForm: React.FC = () => {
     resolver: yupResolver(schema)
   });
 
-  // Gestion dynamique des objectifs
-  const { fields, append, remove, update } = useFieldArray({
-    control,
-    name: 'objectives'
-  });
+  // Gestion dynamique des objectifs -- Deprecated
+  // const { fields, append, remove, update } = useFieldArray({
+  //   control,
+  //   name: 'objectives'
+  // });
 
   const questions: Array<{ id: keyof DailyAnswers; text: string }> = [
     { id: 'q1', text: "Comment s'est passée votre journée ?" },
@@ -58,8 +58,10 @@ const DailyForm: React.FC = () => {
   ];
 
 
+  // Deprecated
   const handleObjectivesChange = (objectives: Objective[]) => {
     setFormObjectives(objectives);
+    console.log(formObjectives);
   };
 
   const onSubmit = async (data: DailyAnswers) => {

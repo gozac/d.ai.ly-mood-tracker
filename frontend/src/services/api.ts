@@ -3,10 +3,18 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { DailyAnswers, Report, Objective } from '../types';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+//const isDevelopment = process.env.NODE_ENV === 'development';
 
 export const api: AxiosInstance = axios.create({
   baseURL: API_URL,
   withCredentials: true,
+  headers: {
+    'Authorization': axios.defaults.headers.common['Authorization'],
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'Same-site': 'None; Secure',
+    'Access-Control-Request-Private-Network': 'true',
+  }
 });
 
 
@@ -17,6 +25,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.withCredentials = true;
     return config;
   },
   (error) => {
@@ -28,6 +37,16 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // if (error.message?.includes('mixed content')) {
+    //   console.warn('Mixed content error detected, using private network URL');
+    //   // Retry the request with explicit HTTP
+    //   const retryConfig = {
+    //     ...error.config,
+    //     url: error.config?.url?.replace('https://', 'http://')
+    //   };
+    //   return axios(retryConfig);
+    // }
+
     const originalRequest = error.config;
 
     // Si l'erreur est 401 et qu'on n'a pas déjà essayé de refresh
@@ -56,9 +75,16 @@ api.interceptors.response.use(
   }
 );
 
+
+interface ObjResponse {
+  message: string;
+  goal: Objective;
+}
+
 export const fetchUserObjectives = async (): Promise<Objective[]> => {
   try {
     const { data } = await api.get<Objective[]>('/get-goals');
+    console.log(data);
     return data;
   } catch (error) {
     console.error('Erreur lors de la récupération des objectifs', error);
@@ -68,8 +94,8 @@ export const fetchUserObjectives = async (): Promise<Objective[]> => {
 
 export const createObjective = async (objective: Omit<Objective, 'id'>): Promise<Objective> => {
   try {
-    const { data } = await api.post<Objective>('/add-goal', { objective });
-    return data;
+    const { data } = await api.post<ObjResponse>('/add-goal', { objective });
+    return data.goal;
   } catch (error) {
     console.error('Erreur lors de la création de l\'objectif', error);
     throw error;
