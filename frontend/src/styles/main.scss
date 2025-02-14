@@ -1,4 +1,4 @@
-// main.scss
+/* main.scss */
 @import "variables";
 @import "bootstrap/scss/bootstrap";
 
@@ -14,4 +14,22 @@
   background: #fff;
   padding: 1.5rem;
   margin: 1rem 0;
+}
+
+
+/* inclure dans un fichier form */
+
+.question {
+  transition: all 0.3s ease-in-out;
+  margin-bottom: 20px;
+}
+
+.question input {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.question.hidden {
+  opacity: 0;
+  transform: translateY(20px);
 }

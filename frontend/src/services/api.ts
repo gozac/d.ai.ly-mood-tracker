@@ -9,11 +9,8 @@ export const api: AxiosInstance = axios.create({
   baseURL: API_URL,
   withCredentials: true,
   headers: {
-    'Authorization': axios.defaults.headers.common['Authorization'],
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'Same-site': 'None; Secure',
-    'Access-Control-Request-Private-Network': 'true',
   }
 });
 
@@ -84,7 +81,6 @@ interface ObjResponse {
 export const fetchUserObjectives = async (): Promise<Objective[]> => {
   try {
     const { data } = await api.get<Objective[]>('/get-goals');
-    console.log(data);
     return data;
   } catch (error) {
     console.error('Erreur lors de la récupération des objectifs', error);

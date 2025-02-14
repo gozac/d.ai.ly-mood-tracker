@@ -12,14 +12,9 @@ from datetime import datetime
 app = Flask(__name__)
 app.config.from_object('config.Config')
 
-app.config.update(
-    SESSION_COOKIE_SECURE=True,  # Pour HTTPS seulement
-    SESSION_COOKIE_SAMESITE='None',  # Permet les requêtes cross-site
-    SESSION_COOKIE_HTTPONLY=True,  # Empêche l'accès JS au cookie
-)
 CORS(app, 
      resources={r"/*": {
-         "origins": ["https://localhost:3000", "http://localhost:3000", app.config["FRONTEND_URL"]],
+         "origins": [app.config["FRONTEND_URL"],"http://localhost:3000"],
          "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
          "allow_headers": [
             "Content-Type",
@@ -28,10 +23,8 @@ CORS(app,
             "Access-Control-Allow-Origin",
             "Access-Control-Allow-Methods",
             "Access-Control-Allow-Credentials",
-            "X-Requested-With"
          ],
          "supports_credentials": True,
-         "expose_headers": ["Content-Range", "X-Content-Range"]
      }})
 
 login_manager = LoginManager()
@@ -52,16 +45,9 @@ def register():
     if not username or not password:
         return jsonify({"error": "Missing credentials"}), 400
     
-    user = User.create(username, password)
-    if user:
-        access_token = create_access_token(identity=user[0])
+    if User.create(username, password):
         return jsonify({
-            "message": "User created successfully",
-            "token": access_token,
-            "user": {
-                "id": user[0],
-                "username": user[1]
-            }
+            "message": "User created successfully"
             }), 201
     else:
         return jsonify({"error": "Username already exists"}), 409
@@ -101,29 +87,20 @@ def login():
 def _build_cors_preflight_response():
     response = make_response()
     response.headers.add("Access-Control-Allow-Origin", app.config["FRONTEND_URL"])
-    response.headers.add('Access-Control-Allow-Headers', "Authorization, Content-Type, same-site")
+    response.headers.add('Access-Control-Allow-Headers', "Authorization, Content-Type")
     response.headers.add('Access-Control-Allow-Methods', "GET, POST, PUT, DELETE")
     response.headers.add('Access-Control-Allow-Credentials', "true")
     response.headers.add('Access-Control-Max-Age', "600")
-    response.headers.add('Access-Control-Allow-Private-Network', "true")
     return response
 
 def _corsify_actual_response(response):
-    response.headers.add("Access-Control-Allow-Origin", "https://localhost:3000")
+    response.headers.add("Access-Control-Allow-Origin", "http://localhost:3000")
     return response
 
 @app.before_request
 def handle_request():
-    #session.permanent = True
-    #app.config['SESSION_COOKIE_SECURE'] = False
     if request.method == "OPTIONS": # CORS preflight
-        print("preflight baby");
         return _build_cors_preflight_response()
-    if request.headers.get('X-Forwarded-Proto', 'http') == 'https':
-        # Force HTTP pour le réseau privé
-        print("weird")
-        #url = request.url.replace('https://', 'http://', 1)
-        #return redirect(url, code=301)
 
 
 @app.route("/verify-token", methods=["GET"])
@@ -181,7 +158,7 @@ def submit_report():
     ).fetchall()
     
     # Générer l'évaluation
-    evaluation = generate_evaluation([r[0] for r in reports])
+    evaluation = generate_evaluation([r[0] for r in reports], answers["perso"]["id"])
     
     # Mettre à jour l'évaluation
     c.execute('DELETE FROM evaluations WHERE user_id = ?', (current_user.id,))
@@ -265,7 +242,6 @@ def add_goal():
 @app.route("/get-goals", methods=["GET"])
 @login_required
 def get_goals():
-    print("gogogogo")
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
     
@@ -359,4 +335,4 @@ def delete_goal(goal_id):
 
 if __name__ == "__main__":
     init_db()
-    app.run(host='::', port=5000, ssl_context=None, debug=True)
+    app.run()

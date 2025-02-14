@@ -36,6 +36,16 @@ class User(UserMixin):
         return None
 
     @staticmethod
+    def get_by_username(username):
+        conn = sqlite3.connect('instance/database.sqlite')
+        c = conn.cursor()
+        user = c.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        conn.close()
+        if user:
+            return User(user[0], user[1], user[2])
+        return None
+
+    @staticmethod
     def create(username, password):
         conn = sqlite3.connect('instance/database.sqlite')
         c = conn.cursor()

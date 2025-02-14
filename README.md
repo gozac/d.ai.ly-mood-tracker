@@ -2,7 +2,7 @@
 
 Une application web permettant aux utilisateurs de suivre leur humeur quotidienne et de recevoir des analyses personnalisées grâce à l'IA.
 
-Une demoest disponible sur : https://daily-tracker.up.railway.app
+Une demo est disponible sur : https://daily-tracker.up.railway.app
 
 ## 🚀 Fonctionnalités
 

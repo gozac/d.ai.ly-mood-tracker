@@ -11,15 +11,18 @@ interface QuestionProps {
 }
 
 const Question: React.FC<QuestionProps> = ({ question, id, register, error }) => {
+
   return (
-    <div className="form-group">
+    <div className="question form-group">
       <label htmlFor={id}>{question}</label>
       <textarea
+        {...register(id)}
         id={id}
-        className={`form-control ${error ? 'is-invalid' : ''}`}
-        {...register(id, { required: true })}
+        onChange={(e) => {
+          register(id).onChange(e);
+        }}
       />
-      {error && <div className="invalid-feedback">{error}</div>}
+      {error && <p className="error">{error}</p>}
     </div>
   );
 };

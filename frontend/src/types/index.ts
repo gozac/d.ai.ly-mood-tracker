@@ -22,6 +22,7 @@ export interface DailyAnswers {
   q2: string;
   q3: string;
   mood: string;
+  perso: number;
   objectives: Objective[];
 }
 
