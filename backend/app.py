@@ -36,6 +36,8 @@ jwt = JWTManager(app)
 def load_user(user_id):
     return User.get(user_id)
 
+# User management
+
 @app.route("/register", methods=["POST"])
 def register():
     data = request.json
@@ -126,11 +128,13 @@ def verify_token():
     }), 200
 
 @app.route("/refresh-token", methods=["POST"])
-@jwt_required(refresh=True)
 def refresh_token():
     current_user_id = get_jwt_identity()
     new_token = create_access_token(identity=current_user_id)
     return jsonify({"token": new_token}), 200
+
+
+# Report Creation
 
 @app.route("/submit-report", methods=["POST"])
 @login_required
@@ -138,27 +142,51 @@ def submit_report():
     data = request.json
     answers = data.get('answers')
     today = datetime.now().strftime('%Y-%m-%d')
-    
-    # Générer le résumé avec OpenAI
-    summary = generate_summary(answers)
-    
+
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
+
+    goals = c.execute(
+        'SELECT title FROM goals WHERE user_id = ? AND status = ?', 
+        (current_user.id, 'active')
+    ).fetchall()
+    
+    # Générer le résumé avec OpenAI
+    summary = generate_summary(answers, goals)
     
     # Sauvegarder le rapport
     c.execute(
         'INSERT INTO reports (user_id, date, answers, summary) VALUES (?, ?, ?, ?)',
         (current_user.id, today, json.dumps(answers), summary)
     )
+
+    conn.commit()
+    conn.close()
+
+
+    return jsonify({
+        "message": "Report submitted successfully",
+        "summary": summary
+    }), 201
+
+@app.route("/create-advise", methods=["POST"])
+@login_required
+def create_advise():
+    data = request.json
+    advisor = data.get('advisor')
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    conn = sqlite3.connect('instance/database.sqlite')
+    c = conn.cursor()
     
     # Récupérer l'historique des rapports
     reports = c.execute(
-        'SELECT summary FROM reports WHERE user_id = ? ORDER BY date DESC LIMIT 7',
+        'SELECT summary, date FROM reports WHERE user_id = ? ORDER BY date DESC LIMIT 7',
         (current_user.id,)
     ).fetchall()
     
     # Générer l'évaluation
-    evaluation = generate_evaluation([r[0] for r in reports], answers["perso"]["id"])
+    evaluation = generate_evaluation([r[0] + r[1] for r in reports], advisor)
     
     # Mettre à jour l'évaluation
     c.execute('DELETE FROM evaluations WHERE user_id = ?', (current_user.id,))
@@ -171,8 +199,7 @@ def submit_report():
     conn.close()
     
     return jsonify({
-        "message": "Report submitted successfully",
-        "summary": summary,
+        "message": "Evalution created successfully",
         "evaluation": evaluation
     }), 201
 
@@ -203,6 +230,8 @@ def get_today_report():
         }), 200
     
     return jsonify({"message": "No report found for today"}), 404
+
+#Goal Management
 
 @app.route("/add-goal", methods=["POST"])
 @login_required

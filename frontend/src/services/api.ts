@@ -50,6 +50,14 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!refreshToken) {
+        // Si pas de refresh token, on redirige directement vers login
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        return Promise.reject(error);
+      }
+
       try {
         // Tentative de refresh du token
         const response = await api.post('/refresh-token');
@@ -119,7 +127,16 @@ export const deleteObjective = async (id: string): Promise<void> => {
 
 
 export const submitReport = async (answers: DailyAnswers): Promise<Report> => {
-  const { data } = await api.post<Report>('/submit-report', { answers });
+  const { data } = await api.post<Report>('/submit-report', { 
+    answers
+  });
+  return data;
+};
+
+export const getAdvise = async (advisor: number): Promise<Report> => {
+  const { data } = await api.post<Report>('/create-advise', {
+    advisor
+  });
   return data;
 };
 

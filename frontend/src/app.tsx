@@ -67,7 +67,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <AuthProvider>
         <Navbar />
-        <AnimatedRoutes />
+            <AnimatedRoutes />
       </AuthProvider>
     </BrowserRouter>
   );

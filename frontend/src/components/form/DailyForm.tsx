@@ -4,10 +4,13 @@ import { useForm, Controller } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { DailyAnswers, Objective } from '../../types';
 import QuestionComponent from './Question';
-import { submitReport } from '../../services/api';
+import { submitReport,getAdvise } from '../../services/api';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import ObjectivesManager from './ObjectivesManager';
+
+import '../../styles/components/_DailyForm.scss';
+import { motion, AnimatePresence } from 'framer-motion';
 
 
 // Type guard function to check if a string is a key of DailyAnswers
@@ -44,16 +47,19 @@ const DailyForm: React.FC = () => {
     '🤩 Excité'
   ];
 
-
-
-  const { register, handleSubmit, control, formState: { errors } } = useForm<DailyAnswers>({
+  const { register, handleSubmit, control, formState: { errors }, trigger } = useForm<DailyAnswers>({
     resolver: yupResolver(schema)
   });
 
+  const handleObjectivesChange = (objectives: Objective[]) => {
+    setFormObjectives(objectives);
+    console.log(formObjectives);
+  };
+
 
   const questions: Array<{ id: keyof DailyAnswers; text: string }> = [
-    { id: 'q1', text: "Comment s'est passée votre journée ?" },
-    { id: 'q2', text: "Qu'avez-vous accompli aujourd'hui ?" },
+    { id: 'q1', text: "Qu'avez-vous accompli aujourd'hui ?" },
+    { id: 'q2', text: "Comment s'est passée votre journée ?" },
     { id: 'q3', text: "Comment vous sentez-vous ce soir ?" }
   ];
 
@@ -71,52 +77,59 @@ const DailyForm: React.FC = () => {
   ];
 
 
-  const handleQuestionComplete = () => {
-      setCurrentStep(prev => prev + 1);   
-  };
-
-  const handleObjectivesChange = (objectives: Objective[]) => {
-    setFormObjectives(objectives);
-    console.log(formObjectives);
-  };
-
-  const onSubmit = async (data: DailyAnswers) => {
-    setIsSubmitting(true);
-    try {
-      await submitReport(data);
-    } finally {
-      setIsSubmitting(false);
-      navigate('/report'); 
+  const handleNext = async () => {
+    const currentFieldId = steps[currentStep].id;
+    const isValid = await trigger(currentFieldId as keyof DailyAnswers);
+    
+    if (isValid) {
+      setCurrentStep(prev => prev + 1);
     }
   };
 
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+  const handlePrevious = () => {
+    setCurrentStep(prev => prev - 1);
+  };
 
-      <ObjectivesManager onObjectivesChange={handleObjectivesChange} />
 
-      {questions.map((q, index: number) => {
-        if (!isKeyOfDailyAnswers(q.id)) return null;
-        return (
-          <div
-            key={q.id}
-            style={{ 
-              display: index <= currentStep ? 'block' : 'block',
-              transition: 'opacity 0.3s ease-in-out',
-              opacity: index <= currentStep ? 1 : 0 
-            }}
-          >
-            <QuestionComponent
-              question={q.text}
-              id={q.id}
-              register={register}
-              error={errors[q.id]?.message}
-            />
-          </div>
-        );
-      })}
+  const onSubmit = async (data: DailyAnswers) => {
+    setIsSubmitting(true);
+    console.log("data: " + data);
+    try {
+      // Destructurer pour séparer perso du reste des réponses
+      const { perso, ...answers } = data;
 
-      {currentStep >= questions.length && (
+      if (perso) {
+        await getAdvise(perso.id);
+        navigate('/report');
+      } else {
+        await submitReport(data);
+      }
+    } catch (error) {
+      console.error('Error submitting report:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const steps = [
+    {
+      id: 'objectives',
+      component: <ObjectivesManager onObjectivesChange={handleObjectivesChange} />
+    },
+    ...questions.map(q => ({
+      id: q.id,
+      component: (
+        <QuestionComponent
+          question={q.text}
+          id={q.id}
+          register={register}
+          error={errors[q.id]?.message}
+        />
+      )
+    })),
+    {
+      id: 'mood',
+      component: (
         <div className="mood-selector">
           <h3>Comment vous sentez-vous ?</h3>
           <Controller
@@ -139,9 +152,11 @@ const DailyForm: React.FC = () => {
           />
           {errors.mood && <p className="error">{errors.mood.message}</p>}
         </div>
-      )}
-
-      {currentStep > questions.length && (
+      )
+    },
+    {
+      id: 'perso',
+      component: (
         <div className="perso-selector">
           <h3>Choisissez votre conseiller :</h3>
           <Controller
@@ -154,7 +169,7 @@ const DailyForm: React.FC = () => {
                     key={index}
                     type="button"
                     onClick={() => field.onChange(perso)}
-                    className={field.value === perso.id ? 'selected' : ''}
+                    className={field.value === perso ? 'selected' : ''}
                   >
                     {perso.name}
                   </button>
@@ -162,22 +177,66 @@ const DailyForm: React.FC = () => {
               </div>
             )}
           />
-          {errors.perso && <p className="error">{errors.perso.message}</p>}
         </div>
-      )}
+      )
+    }
+  ];
 
-      {currentStep <= questions.length && (
-        <>
-          <button onClick={() => handleQuestionComplete()}>Suite</button>
-        </>
-      )}
-      {currentStep > questions.length && (
-        <>
-          <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Envoi...' : 'Envoyer'}</button>
-        </>
-      )}
+ 
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="form-container">
+      <div className="progress-bar">
+        <div 
+          className="progress"
+          style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}
+        />
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentStep}
+          initial={{ x: 100, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: -100, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 30}}
+          className="step-container"
+        >
+          {steps[currentStep].component}
+        </motion.div>
+      </AnimatePresence>
+
+      <div className="navigation-buttons">
+        {currentStep > 0 && (
+          <button
+            type="button"
+            onClick={handlePrevious}
+            className="nav-button prev"
+          >
+            Précédent
+          </button>
+        )}
+        
+        {currentStep < steps.length - 1 ? (
+          <button
+            type="button"
+            onClick={handleNext}
+            className="nav-button next"
+          >
+            Suivant
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="nav-button submit"
+          >
+            {isSubmitting ? 'Chargement...' : 'Terminer'}
+          </button>
+        )}
+      </div>
     </form>
   );
+
 };
 
 export default DailyForm;

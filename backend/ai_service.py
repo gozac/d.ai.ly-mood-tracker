@@ -4,10 +4,22 @@ from personnages import get_character_by_id
 
 client = OpenAI(api_key=Config.OPENAI_API_KEY)
 
-def generate_summary(answers):
+def generate_summary(answers, objectifs):
     prompt = f"""
+    Les objectifs du moment:
+    {objectifs}
+    L'humeur:
+    {answers["mood"]}
+
     Voici les réponses à trois questions sur la journée d'aujourd'hui :
-    {answers}
+        _Qu'avez-vous accompli aujourd'hui ?
+        réponse : {answers["q1"]}
+
+        _Comment s'est passée votre journée ?
+        réponse : {answers["q2"]}
+
+        _Comment vous sentez-vous ce soir ?
+        réponse : {answers["q3"]}
     
     Générez un résumé concis et empathique de cette journée.
     """
@@ -23,10 +35,10 @@ def generate_summary(answers):
 
 def generate_evaluation(reports_history, id=0):
     prompt = f"""
-    Voici les résumés des derniers jours :
+    Voici mes résumés des derniers jours :
     {reports_history}
     
-    Analysez l'évolution et fournissez une évaluation constructive.
+    Analysez mon évolution et fournissez moi une évaluation constructive.
     """
 
     perso = get_character_by_id(id)

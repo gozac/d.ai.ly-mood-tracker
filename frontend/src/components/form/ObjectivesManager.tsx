@@ -82,7 +82,7 @@ const ObjectivesManager: React.FC<ObjectivesManagerProps> = ({ onObjectivesChang
 
   return (
     <div className="objectives-manager">
-      <h3>Mes Objectifs</h3>
+      <h3>Mes Objectifs Actuels</h3>
       
       <div className="add-objective-container">
         <input 
