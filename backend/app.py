@@ -278,7 +278,7 @@ def get_goals():
     status = request.args.get('status', 'active')
     
     goals = c.execute(
-        'SELECT id, title, description, status, target_date FROM goals WHERE user_id = ? AND status = ?', 
+        'SELECT id, title, status FROM goals WHERE user_id = ? AND status = ?', 
         (current_user.id, status)
     ).fetchall()
     
@@ -288,9 +288,7 @@ def get_goals():
     goals_list = [{
         "id": goal[0],
         "title": goal[1],
-        "description": goal[2],
-        "status": goal[3],
-        "target_date": goal[4]
+        "status": goal[2],
     } for goal in goals]
     
     return jsonify(goals_list), 200

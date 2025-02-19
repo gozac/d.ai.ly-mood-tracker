@@ -1,7 +1,8 @@
 // src/components/form/Question.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { UseFormRegister } from 'react-hook-form';
 import { DailyAnswers } from '../../types';
+import '../../styles/components/_Question.scss';
 
 interface QuestionProps {
   question: string;
@@ -11,18 +12,39 @@ interface QuestionProps {
 }
 
 const Question: React.FC<QuestionProps> = ({ question, id, register, error }) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const [contentLength, setContentLength] = useState(0);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    register(id).onChange(e);
+    setContentLength(e.target.value.length);
+    
+    // Ajuster automatiquement la hauteur
+    e.target.style.height = 'auto';
+    e.target.style.height = `${e.target.scrollHeight}px`;
+  };
 
   return (
-    <div className="question form-group">
-      <label htmlFor={id}>{question}</label>
-      <textarea
-        {...register(id)}
-        id={id}
-        onChange={(e) => {
-          register(id).onChange(e);
-        }}
-      />
-      {error && <p className="error">{error}</p>}
+    <div className={`question-container ${isFocused ? 'focused' : ''}`}>
+      <label htmlFor={id} className="question-label">
+        {question}
+      </label>
+      <div className="textarea-wrapper">
+        <textarea
+          {...register(id)}
+          id={id}
+          className={`question-textarea ${error ? 'error' : ''}`}
+          onChange={handleChange}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          placeholder="Écrivez votre réponse ici..."
+          rows={1}
+        />
+        <div className="character-count">
+          {contentLength}/500
+        </div>
+      </div>
+      {error && <p className="error-message">{error}</p>}
     </div>
   );
 };

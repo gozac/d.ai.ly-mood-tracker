@@ -1,0 +1,132 @@
+/* src/styles/_Question.scss */
+.question-container {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.question-container.focused {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.question-label {
+  display: block;
+  margin-bottom: 0.8rem;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.textarea-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.question-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: none;
+  transition: all 0.3s ease;
+  background-color: #f8f9fa;
+}
+
+.question-textarea:focus {
+  outline: none;
+  border-color: #007bff;
+  background-color: #ffffff;
+}
+
+.question-textarea.error {
+  border-color: #dc3545;
+}
+
+.question-textarea::placeholder {
+  color: #adb5bd;
+}
+
+.character-count {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.8rem;
+  color: #6c757d;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.error-message {
+  margin-top: 0.5rem;
+  color: #dc3545;
+  font-size: 0.9rem;
+}
+
+/* Styles pour mobile */
+@media (max-width: 768px) {
+  .question-container {
+    padding: 0.8rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .question-label {
+    font-size: 1rem;
+  }
+
+  .question-textarea {
+    font-size: 1rem;
+    padding: 0.8rem;
+    min-height: 80px;
+  }
+
+  /* Améliorer la lisibilité sur mobile */
+  .question-textarea:focus {
+    font-size: 16px; /* Empêche le zoom automatique sur iOS */
+  }
+}
+
+/* Styles pour le mode sombre */
+@media (prefers-color-scheme: dark) {
+  .question-container {
+    background-color: #2c3e50;
+  }
+
+  .question-label {
+    color: #ecf0f1;
+  }
+
+  .question-textarea {
+    background-color: #34495e;
+    border-color: #465c6e;
+    color: #ecf0f1;
+  }
+
+  .question-textarea:focus {
+    background-color: #2c3e50;
+    border-color: #3498db;
+  }
+
+  .character-count {
+    color: #bdc3c7;
+    background-color: rgba(44, 62, 80, 0.8);
+  }
+}
+
+/* Animation de focus */
+@keyframes focusAnimation {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.question-container.focused {
+  animation: focusAnimation 0.3s ease;
+}
