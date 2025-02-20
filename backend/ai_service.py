@@ -38,7 +38,7 @@ def generate_evaluation(reports_history, id=0):
     Voici mes résumés des derniers jours :
     {reports_history}
     
-    Analysez mon évolution et fournissez moi une évaluation constructive.
+    Analysez mon évolution et fournissez moi une évaluation constructive qui se termine par un son peu connu à découvrir.
     """
 
     perso = get_character_by_id(id)

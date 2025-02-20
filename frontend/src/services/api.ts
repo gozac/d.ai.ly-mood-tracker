@@ -126,7 +126,7 @@ export const deleteObjective = async (id: string): Promise<void> => {
 };
 
 
-export const submitReport = async (answers: DailyAnswers): Promise<Report> => {
+export const submitReport = async (answers: Omit<DailyAnswers, 'perso'>): Promise<Report> => {
   const { data } = await api.post<Report>('/submit-report', { 
     answers
   });

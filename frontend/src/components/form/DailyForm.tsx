@@ -12,12 +12,6 @@ import ObjectivesManager from './ObjectivesManager';
 import '../../styles/components/_DailyForm.scss';
 import { motion, AnimatePresence } from 'framer-motion';
 
-
-// Type guard function to check if a string is a key of DailyAnswers
-function isKeyOfDailyAnswers(key: string): key is keyof DailyAnswers {
-  return ['q1', 'q2', 'q3'].includes(key);
-}
-
 const schema = yup.object().shape({
   q1: yup.string().required('Ce champ est requis'),
   q2: yup.string().required('Ce champ est requis'),
@@ -40,11 +34,11 @@ const DailyForm: React.FC = () => {
   const navigate = useNavigate();
 
   const moods = [
-    '😊 Heureux',
-    '😢 Triste', 
-    '😴 Fatigué',
-    '😡 Frustré',
-    '🤩 Excité'
+    'Heureux',
+    'Triste', 
+    'Fatigué',
+    'Frustré',
+    'Excité'
   ];
 
   const { register, handleSubmit, control, formState: { errors }, trigger } = useForm<DailyAnswers>({
@@ -102,7 +96,7 @@ const DailyForm: React.FC = () => {
         await getAdvise(perso.id);
         navigate('/report');
       } else {
-        await submitReport(data);
+        await submitReport(answers);
       }
     } catch (error) {
       console.error('Error submitting report:', error);
