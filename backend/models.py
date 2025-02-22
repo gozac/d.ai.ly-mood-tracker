@@ -3,6 +3,12 @@ from flask_login import UserMixin
 import sqlite3
 import json
 from datetime import datetime
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"
+)
 
 class User(UserMixin):
     def __init__(self, id, username, password_hash):
@@ -46,20 +52,38 @@ class User(UserMixin):
         return None
 
     @staticmethod
-    def create(username, password):
+    def create(username: str, password: str) -> bool:
         conn = sqlite3.connect('instance/database.sqlite')
         c = conn.cursor()
+        
+        # Vérifier si l'utilisateur existe déjà
+        if c.execute('SELECT 1 FROM users WHERE username = ?', (username,)).fetchone():
+            conn.close()
+            return False
+        
         try:
+            # Hasher le mot de passe
+            hashed_password = pwd_context.hash(password)
+            
             c.execute(
                 'INSERT INTO users (username, password_hash) VALUES (?, ?)',
-                (username, generate_password_hash(password))
+                (username, hashed_password)
             )
             conn.commit()
             return True
-        except sqlite3.IntegrityError:
+        except Exception as e:
+            print(f"Error creating user: {e}")
             return False
         finally:
             conn.close()
+
+    @staticmethod
+    def verify_password(plain_password: str, hashed_password: str) -> bool:
+        try:
+            return pwd_context.verify(plain_password, hashed_password)
+        except Exception as e:
+            print(f"Password verification error: {e}")
+            return False
 
 class Report:
     def __init__(self, user_id, date, answers, summary):

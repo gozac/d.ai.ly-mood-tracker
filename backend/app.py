@@ -1,194 +1,188 @@
-from flask import Flask, request, jsonify, make_response, redirect
-from flask_cors import CORS
-from flask_login import LoginManager, login_user, login_required, current_user
-from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_required
-from werkzeug.security import check_password_hash
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from datetime import datetime, timedelta
+from typing import Optional
+from pydantic import BaseModel
+import sqlite3
+import json
+
 from models import User
 from database import init_db
 from ai_service import generate_summary, generate_evaluation
-import sqlite3, json
-from datetime import datetime
+from config import Config
 
-app = Flask(__name__)
-app.config.from_object('config.Config')
+app = FastAPI()
 
-CORS(app, 
-     resources={r"/*": {
-         "origins": [app.config["FRONTEND_URL"],"http://localhost:3000"],
-         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         "allow_headers": [
-            "Content-Type",
-            "Authorization",
-            "Access-Control-Allow-Headers",
-            "Access-Control-Allow-Origin",
-            "Access-Control-Allow-Methods",
-            "Access-Control-Allow-Credentials",
-         ],
-         "supports_credentials": True,
-     }})
+# Configuration CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[Config.FRONTEND_URL, "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-login_manager = LoginManager()
-login_manager.init_app(app)
+# Configuration sécurité
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"
+)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-jwt = JWTManager(app)
+# Modèles Pydantic
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user: str
 
-@login_manager.user_loader
-def load_user(user_id):
-    return User.get(user_id)
+class UserBase(BaseModel):
+    username: str
 
-# User management
+class UserCreate(UserBase):
+    password: str
 
-@app.route("/register", methods=["POST"])
-def register():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
+class UserResponse(UserBase):
+    id: int
+
+class ReportCreate(BaseModel):
+    answers: dict
+
+class GoalCreate(BaseModel):
+    objective: dict
+
+# Modèles Pydantic additionnels
+class AdviseCreate(BaseModel):
+    advisor: int
+
+class GoalUpdate(BaseModel):
+    title: Optional[str] = None
+    status: Optional[str] = None
+
+# Fonctions utilitaires
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now() + Config.JWT_ACCESS_TOKEN_EXPIRES
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, Config.JWT_SECRET_KEY, algorithm="HS256")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, Config.JWT_SECRET_KEY, algorithms=["HS256"])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
     
-    if not username or not password:
-        return jsonify({"error": "Missing credentials"}), 400
-    
-    if User.create(username, password):
-        return jsonify({
-            "message": "User created successfully"
-            }), 201
-    else:
-        return jsonify({"error": "Username already exists"}), 409
+    user = User.get(int(user_id))
+    if user is None:
+        raise credentials_exception
+    return user
 
-@app.route("/login", methods=["POST"])
-def login():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
+# Routes
+@app.post("/register", response_model=dict)
+async def register(user: UserCreate):
+    # Hasher le mot de passe avec la nouvelle configuration
+    # hashed_password = pwd_context.hash(user.password)
+    if User.create(user.username, user.password):
+        return {"message": "User created successfully", "user": user.username}
+    raise HTTPException(status_code=409, detail="Username already exists")
+
+@app.post("/token", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
-    user = c.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-    conn.close()
-    
-    if user and check_password_hash(user[2], password):
-        user_obj = User(user[0], user[1], user[2])
-        login_user(user_obj)
-        # Créer le token JWT
-        access_token = create_access_token(identity=user[0])
-
-        return jsonify({
-            "message": "Logged in successfully",
-            "token": access_token,
-            "user": {
-                "id": user[0],
-                "username": user[1]
-            }
-        }), 200
-    
-    return jsonify({"error": "Invalid credentials"}), 401
-
-
-#do a new preflight on /* method
-
-
-def _build_cors_preflight_response():
-    response = make_response()
-    response.headers.add("Access-Control-Allow-Origin", app.config["FRONTEND_URL"])
-    response.headers.add('Access-Control-Allow-Headers', "Authorization, Content-Type")
-    response.headers.add('Access-Control-Allow-Methods', "GET, POST, PUT, DELETE")
-    response.headers.add('Access-Control-Allow-Credentials', "true")
-    response.headers.add('Access-Control-Max-Age', "600")
-    return response
-
-def _corsify_actual_response(response):
-    response.headers.add("Access-Control-Allow-Origin", "http://localhost:3000")
-    return response
-
-@app.before_request
-def handle_request():
-    if request.method == "OPTIONS": # CORS preflight
-        return _build_cors_preflight_response()
-
-
-@app.route("/verify-token", methods=["GET"])
-@jwt_required()
-def verify_token():
-    current_user_id = get_jwt_identity()
-    
-    # Récupérer les informations de l'utilisateur depuis la base de données
-    conn = sqlite3.connect('instance/database.sqlite')
-    c = conn.cursor()
-    user = c.execute('SELECT * FROM users WHERE id = ?', (current_user_id,)).fetchone()
+    user = c.execute('SELECT * FROM users WHERE username = ?', (form_data.username,)).fetchone()
     conn.close()
     
     if not user:
-        return jsonify({"error": "User not found"}), 404
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
-    return jsonify({
+    try:
+        if not pwd_context.verify(form_data.password, user[2]):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except Exception as e:
+        print(f"Password verification error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = create_access_token(data={"sub": str(user[0])})
+    return {"user": user[1], "access_token": access_token, "token_type": "bearer"}
+
+@app.get("/verify-token")
+async def verify_token(current_user: User = Depends(get_current_user)):
+    return {
         "message": "Token is valid",
         "user": {
-            "id": user[0],
-            "username": user[1]
+            "id": current_user.id,
+            "username": current_user.username
         }
-    }), 200
+    }
 
-@app.route("/refresh-token", methods=["POST"])
-def refresh_token():
-    current_user_id = get_jwt_identity()
-    new_token = create_access_token(identity=current_user_id)
-    return jsonify({"token": new_token}), 200
-
-
-# Report Creation
-
-@app.route("/submit-report", methods=["POST"])
-@login_required
-def submit_report():
-    data = request.json
-    answers = data.get('answers')
-    today = datetime.now().strftime('%Y-%m-%d')
-
+@app.post("/submit-report")
+async def submit_report(
+    report: ReportCreate,
+    current_user: User = Depends(get_current_user)
+):
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
 
     goals = c.execute(
         'SELECT title FROM goals WHERE user_id = ? AND status = ?', 
         (current_user.id, 'active')
     ).fetchall()
     
-    # Générer le résumé avec OpenAI
-    summary = generate_summary(answers, goals)
+    summary = generate_summary(report.answers, goals)
     
-    # Sauvegarder le rapport
     c.execute(
         'INSERT INTO reports (user_id, date, answers, summary) VALUES (?, ?, ?, ?)',
-        (current_user.id, today, json.dumps(answers), summary)
+        (current_user.id, today, json.dumps(report.answers), summary)
     )
 
     conn.commit()
     conn.close()
 
-
-    return jsonify({
+    return {
         "message": "Report submitted successfully",
         "summary": summary
-    }), 201
+    }
 
-@app.route("/create-advise", methods=["POST"])
-@login_required
-def create_advise():
-    data = request.json
-    advisor = data.get('advisor')
+@app.post("/create-advise", response_model=dict)
+async def create_advise(
+    advise: AdviseCreate,
+    current_user: User = Depends(get_current_user)
+):
     today = datetime.now().strftime('%Y-%m-%d')
-
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
     
-    # Récupérer l'historique des rapports
     reports = c.execute(
-        'SELECT summary, date FROM reports WHERE user_id = ? ORDER BY date DESC LIMIT 7',
+        'SELECT summary, date FROM reports WHERE user_id = ? ORDER BY date DESC LIMIT 10',
         (current_user.id,)
     ).fetchall()
     
-    # Générer l'évaluation
-    evaluation = generate_evaluation([r[0] + r[1] for r in reports], advisor)
+    evaluation = generate_evaluation([r[0] + r[1] for r in reports], advise.advisor)
     
-    # Mettre à jour l'évaluation
     c.execute('DELETE FROM evaluations WHERE user_id = ?', (current_user.id,))
     c.execute(
         'INSERT INTO evaluations (user_id, date, content) VALUES (?, ?, ?)',
@@ -198,14 +192,13 @@ def create_advise():
     conn.commit()
     conn.close()
     
-    return jsonify({
-        "message": "Evalution created successfully",
+    return {
+        "message": "Evaluation created successfully",
         "evaluation": evaluation
-    }), 201
+    }
 
-@app.route("/get-today-report", methods=["GET"])
-@login_required
-def get_today_report():
+@app.get("/get-today-report", response_model=dict)
+async def get_today_report(current_user: User = Depends(get_current_user)):
     today = datetime.now().strftime('%Y-%m-%d')
     
     conn = sqlite3.connect('instance/database.sqlite')
@@ -221,27 +214,30 @@ def get_today_report():
     
     conn.close()
     
-    if report:
-        return jsonify({
-            "date": report[3],
-            "answers": json.loads(report[0]),
-            "summary": report[1],
-            "evaluation": report[2]
-        }), 200
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No report found for today"
+        )
     
-    return jsonify({"message": "No report found for today"}), 404
+    return {
+        "date": report[3],
+        "answers": json.loads(report[0]),
+        "summary": report[1],
+        "evaluation": report[2]
+    }
 
-#Goal Management
-
-@app.route("/add-goal", methods=["POST"])
-@login_required
-def add_goal():
-    data = request.json
-    objective = data.get('objective')
-    title = objective.get('title')
-    
+@app.post("/add-goal", response_model=dict)
+async def add_goal(
+    goal: GoalCreate,
+    current_user: User = Depends(get_current_user)
+):
+    title = goal.objective.get('title')
     if not title:
-        return jsonify({"error": "Goal title is required"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Goal title is required"
+        )
     
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
@@ -254,28 +250,30 @@ def add_goal():
         goal_id = c.lastrowid
         conn.commit()
         
-        return jsonify({
+        return {
             "message": "Goal added successfully",
             "goal": {
                 "id": goal_id,
                 "title": title,
                 "status": "active"
             }
-        }), 201
+        }
     except Exception as e:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
     finally:
         conn.close()
 
-@app.route("/get-goals", methods=["GET"])
-@login_required
-def get_goals():
+@app.get("/get-goals", response_model=list)
+async def get_goals(
+    status: str = "active",
+    current_user: User = Depends(get_current_user)
+):
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
-    
-    # Optionally filter by status
-    status = request.args.get('status', 'active')
     
     goals = c.execute(
         'SELECT id, title, status FROM goals WHERE user_id = ? AND status = ?', 
@@ -284,82 +282,93 @@ def get_goals():
     
     conn.close()
     
-    # Convert to list of dictionaries
-    goals_list = [{
+    return [{
         "id": goal[0],
         "title": goal[1],
         "status": goal[2],
     } for goal in goals]
-    
-    return jsonify(goals_list), 200
 
-@app.route("/update-goal/<int:goal_id>", methods=["PUT"])
-@login_required
-def update_goal(goal_id):
-    data = request.json
-    
+@app.put("/update-goal/{goal_id}", response_model=dict)
+async def update_goal(
+    goal_id: int,
+    goal: GoalUpdate,
+    current_user: User = Depends(get_current_user)
+):
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
     
-    # Verify goal belongs to current user
-    goal = c.execute(
+    db_goal = c.execute(
         'SELECT * FROM goals WHERE id = ? AND user_id = ?', 
         (goal_id, current_user.id)
     ).fetchone()
     
-    if not goal:
+    if not db_goal:
         conn.close()
-        return jsonify({"error": "Goal not found"}), 404
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Goal not found"
+        )
     
-    # Update fields
-    title = data.get('title', goal[2])
-    status = data.get('status', goal[4])
+    title = goal.title or db_goal[2]
+    status = goal.status or db_goal[4]
     
     try:
         c.execute(
-            '''UPDATE goals 
-               SET title = ?, status = ?
-               WHERE id = ?''',
+            'UPDATE goals SET title = ?, status = ? WHERE id = ?',
             (title, status, goal_id)
         )
         conn.commit()
         
-        return jsonify({
+        return {
             "message": "Goal updated successfully",
             "goal": {
                 "id": goal_id,
                 "title": title,
                 "status": status
             }
-        }), 200
+        }
     except Exception as e:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
     finally:
         conn.close()
 
-@app.route("/delete-goal/<int:goal_id>", methods=["DELETE"])
-@login_required
-def delete_goal(goal_id):
+@app.delete("/delete-goal/{goal_id}", response_model=dict)
+async def delete_goal(
+    goal_id: int,
+    current_user: User = Depends(get_current_user)
+):
     conn = sqlite3.connect('instance/database.sqlite')
     c = conn.cursor()
     
     try:
-        # First, verify the goal belongs to the current user
-        c.execute('DELETE FROM goals WHERE id = ? AND user_id = ?', (goal_id, current_user.id))
+        c.execute(
+            'DELETE FROM goals WHERE id = ? AND user_id = ?',
+            (goal_id, current_user.id)
+        )
         
         if c.rowcount == 0:
             conn.close()
-            return jsonify({"error": "Goal not found or not authorized"}), 404
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Goal not found or not authorized"
+            )
         
         conn.commit()
-        return jsonify({"message": "Goal deleted successfully"}), 200
+        return {"message": "Goal deleted successfully"}
     except Exception as e:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
     finally:
         conn.close()
 
 if __name__ == "__main__":
     init_db()
-    app.run()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000)

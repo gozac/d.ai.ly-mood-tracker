@@ -54,43 +54,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuth();
   }, []);
 
-  // Vérifier le token au chargement
-  useEffect(() => {
-    const initializeAuth = async () => {
-      const token = localStorage.getItem('token');
-      
-      if (token) {
-        try {
-          // Vérifier si le token est valide
-          const response = await api.get('/verify-token');
-          setUser(response.data.user);
-          // Configurer le token dans les headers axios
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        } catch (err) {
-          // Si le token est invalide, on déconnecte l'utilisateur
-          localStorage.removeItem('token');
-          setUser(null);
-        }
-      }
-      
-      setLoading(false);
-    };
-
-    initializeAuth();
-  }, []);
-
   // Fonction de connexion
   const login = async (username: string, password: string) => {
+    const formData = new URLSearchParams();
+    formData.append('username', username);
+    formData.append('password', password);
+
     try {
       setError(null);
-      const response = await api.post('/login', { username, password });
-      const { token, user } = response.data;
-      
+      const response = await api.post('token', formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+      console.log(response.data);
+      const { access_token, token_type, user } = response.data;
+
       // Sauvegarder le token
-      localStorage.setItem('token', token);
+      localStorage.setItem('token', access_token);
       
       // Configurer le token dans les headers axios
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       
       // Mettre à jour l'état
       setUser(user);

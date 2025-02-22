@@ -22,7 +22,7 @@ interface Credentials {
 
 // Deprecated
 export const loginUser = async (credentials: Credentials): Promise<User> => {
-  const { data } = await api.post<AuthResponse>('/login', credentials);
+  const { data } = await api.post<AuthResponse>('/token', credentials);
   if (data.token) {
     localStorage.setItem('token', data.token);
     // Configurer le token dans les headers axios
