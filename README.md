@@ -16,7 +16,7 @@ Une demo est disponible sur : https://daily-tracker.up.railway.app
 
 - React
 - TypeScript
-- Flask
+- FastAPI
 - OpenAI API
 - SCSS & Bootstrap 5
 - React Router v6
@@ -54,15 +54,13 @@ pip install -r requirements.txt
 
 Créez un fichier .env dans le dossier frontend :
 ```
-REACT_APP_API_URL=http://localhost:5000
+REACT_APP_API_URL=http://localhost:3000
 ```
 Créez un fichier .env dans le dossier backend :
 ```
-FLASK_APP=app.py
-FLASK_ENV=development
 OPENAI_API_KEY=votre-clé-api
 SECRET_KEY=votre-clé-secrète
-JWT_KEY=cle-secrete
+JWT_SECRET=cle-secrete
 ```
 
 ## 🚀 Démarrage
@@ -70,7 +68,7 @@ JWT_KEY=cle-secrete
 1. Lancer le Backend
 ```
 cd backend
-flask run
+uvicorn main:app --reload
 ```
 
 2. Lancer le Frontend
@@ -79,7 +77,8 @@ cd frontend
 npm start
 ```
 
-L'application sera accessible à l'adresse : http://localhost:5000
+L'application sera accessible à l'adresse : http://localhost:3000
+La documentation de l'API sera disponible à : http://localhost:5000/docs
 
 ## 📝 Structure du Projet
 
@@ -91,17 +90,18 @@ daily-mood-tracker/
 │   │   ├── services/
 │   │   └── styles/
 │   └── public/
-└── backend/          # API Flask
+└── backend/          # API FastAPI
     ├── app.py
+    ├── models/
     └── requirements.txt
 ```
 
 ## 🔒 Sécurité
 
 - Authentification par token JWT
-- Hachage des mots de passe
-- Protection CSRF
-- Validation des données
+- Hachage des mots de passe avec Bcrypt
+- Validation des données avec Pydantic
+- Middleware CORS
 
 ## 🤝 Contribution
 
