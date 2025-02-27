@@ -6,10 +6,10 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
 from pydantic import BaseModel
-import sqlite3
 import json
+from flask import Flask, request, jsonify
 
-from models import User
+from models import User, Report, Evaluation, Goal, Base, db_session
 from database import init_db
 from ai_service import generate_summary, generate_evaluation
 from config import Config
@@ -24,6 +24,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Configuration sécurité
 pwd_context = CryptContext(
@@ -98,10 +99,7 @@ async def register(user: UserCreate):
 
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    conn = sqlite3.connect('instance/database.sqlite')
-    c = conn.cursor()
-    user = c.execute('SELECT * FROM users WHERE username = ?', (form_data.username,)).fetchone()
-    conn.close()
+    user = User.get_by_username(form_data.username)
     
     if not user:
         raise HTTPException(
@@ -111,7 +109,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         )
     
     try:
-        if not pwd_context.verify(form_data.password, user[2]):
+        if not User.verify_password(form_data.password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
@@ -125,8 +123,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    access_token = create_access_token(data={"sub": str(user[0])})
-    return {"user": user[1], "access_token": access_token, "token_type": "bearer"}
+    access_token = create_access_token(data={"sub": str(user.id)})
+    return {"user": user.username, "access_token": access_token, "token_type": "bearer"}
+
+@app.post("/message")
+async def message(message: str):
+    return {"message": message}
 
 @app.get("/verify-token")
 async def verify_token(current_user: User = Depends(get_current_user)):
@@ -143,29 +145,36 @@ async def submit_report(
     report: ReportCreate,
     current_user: User = Depends(get_current_user)
 ):
-    conn = sqlite3.connect('instance/database.sqlite')
-    c = conn.cursor()
     today = datetime.now().strftime('%Y-%m-%d')
 
-    goals = c.execute(
-        'SELECT title FROM goals WHERE user_id = ? AND status = ?', 
-        (current_user.id, 'active')
-    ).fetchall()
+    # Récupérer les objectifs actifs
+    goals = db_session.query(Goal).filter_by(
+        user_id=current_user.id, 
+        status='active'
+    ).all()
     
-    summary = generate_summary(report.answers, goals)
+    summary = generate_summary(report.answers, [goal.title for goal in goals])
     
-    c.execute(
-        'INSERT INTO reports (user_id, date, answers, summary) VALUES (?, ?, ?, ?)',
-        (current_user.id, today, json.dumps(report.answers), summary)
+    new_report = Report(
+        user_id=current_user.id,
+        date=today,
+        answers=json.dumps(report.answers),
+        summary=summary
     )
-
-    conn.commit()
-    conn.close()
-
-    return {
-        "message": "Report submitted successfully",
-        "summary": summary
-    }
+    
+    try:
+        db_session.add(new_report)
+        db_session.commit()
+        return {
+            "message": "Report submitted successfully",
+            "summary": summary
+        }
+    except Exception as e:
+        db_session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 @app.post("/create-advise", response_model=dict)
 async def create_advise(
@@ -173,46 +182,52 @@ async def create_advise(
     current_user: User = Depends(get_current_user)
 ):
     today = datetime.now().strftime('%Y-%m-%d')
-    conn = sqlite3.connect('instance/database.sqlite')
-    c = conn.cursor()
     
-    reports = c.execute(
-        'SELECT summary, date FROM reports WHERE user_id = ? ORDER BY date DESC LIMIT 10',
-        (current_user.id,)
-    ).fetchall()
+    # Récupérer les 10 derniers rapports
+    reports = db_session.query(Report)\
+        .filter_by(user_id=current_user.id)\
+        .order_by(Report.date.desc())\
+        .limit(10)\
+        .all()
     
-    evaluation = generate_evaluation([r[0] + r[1] for r in reports], advise.advisor)
-    
-    c.execute('DELETE FROM evaluations WHERE user_id = ?', (current_user.id,))
-    c.execute(
-        'INSERT INTO evaluations (user_id, date, content) VALUES (?, ?, ?)',
-        (current_user.id, today, evaluation)
+    evaluation = generate_evaluation(
+        [f"{r.summary}{r.date}" for r in reports], 
+        advise.advisor
     )
     
-    conn.commit()
-    conn.close()
+    # Supprimer l'ancienne évaluation et créer la nouvelle
+    db_session.query(Evaluation).filter_by(user_id=current_user.id).delete()
     
-    return {
-        "message": "Evaluation created successfully",
-        "evaluation": evaluation
-    }
+    new_evaluation = Evaluation(
+        user_id=current_user.id,
+        date=today,
+        content=evaluation
+    )
+    
+    try:
+        db_session.add(new_evaluation)
+        db_session.commit()
+        return {
+            "message": "Evaluation created successfully",
+            "evaluation": evaluation
+        }
+    except Exception as e:
+        db_session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 @app.get("/get-today-report", response_model=dict)
 async def get_today_report(current_user: User = Depends(get_current_user)):
     today = datetime.now().strftime('%Y-%m-%d')
     
-    conn = sqlite3.connect('instance/database.sqlite')
-    c = conn.cursor()
-    
-    report = c.execute(
-        '''SELECT r.answers, r.summary, e.content, r.date 
-           FROM reports r 
-           LEFT JOIN evaluations e ON e.user_id = r.user_id 
-           WHERE r.user_id = ? AND r.date = ?''',
-        (current_user.id, today)
-    ).fetchone()
-    
-    conn.close()
+    # Modification de la requête pour faire un LEFT JOIN correct
+    report = db_session.query(Report, Evaluation)\
+        .outerjoin(Evaluation, Report.user_id == Evaluation.user_id)\
+        .filter(Report.user_id == current_user.id)\
+        .filter(Report.date == today)\
+        .first()
     
     if not report:
         raise HTTPException(
@@ -220,11 +235,14 @@ async def get_today_report(current_user: User = Depends(get_current_user)):
             detail="No report found for today"
         )
     
+    # Déballage des résultats
+    report_obj, evaluation_obj = report
+    
     return {
-        "date": report[3],
-        "answers": json.loads(report[0]),
-        "summary": report[1],
-        "evaluation": report[2]
+        "date": report_obj.date,
+        "answers": json.loads(report_obj.answers) if hasattr(report_obj, 'answers') else None,
+        "summary": report_obj.summary,
+        "evaluation": evaluation_obj.content if evaluation_obj else None
     }
 
 @app.post("/add-goal", response_model=dict)
@@ -239,53 +257,45 @@ async def add_goal(
             detail="Goal title is required"
         )
     
-    conn = sqlite3.connect('instance/database.sqlite')
-    c = conn.cursor()
+    new_goal = Goal(
+        user_id=current_user.id,
+        title=title,
+        status='active'
+    )
     
     try:
-        c.execute(
-            'INSERT INTO goals (user_id, title) VALUES (?, ?)',
-            (current_user.id, title)
-        )
-        goal_id = c.lastrowid
-        conn.commit()
+        db_session.add(new_goal)
+        db_session.commit()
         
         return {
             "message": "Goal added successfully",
             "goal": {
-                "id": goal_id,
+                "id": new_goal.id,
                 "title": title,
                 "status": "active"
             }
         }
     except Exception as e:
-        conn.rollback()
+        db_session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-    finally:
-        conn.close()
 
 @app.get("/get-goals", response_model=list)
 async def get_goals(
     status: str = "active",
     current_user: User = Depends(get_current_user)
 ):
-    conn = sqlite3.connect('instance/database.sqlite')
-    c = conn.cursor()
-    
-    goals = c.execute(
-        'SELECT id, title, status FROM goals WHERE user_id = ? AND status = ?', 
-        (current_user.id, status)
-    ).fetchall()
-    
-    conn.close()
+    goals = db_session.query(Goal)\
+        .filter_by(user_id=current_user.id)\
+        .filter_by(status=status)\
+        .all()
     
     return [{
-        "id": goal[0],
-        "title": goal[1],
-        "status": goal[2],
+        "id": goal.id,
+        "title": goal.title,
+        "status": goal.status,
     } for goal in goals]
 
 @app.put("/update-goal/{goal_id}", response_model=dict)
@@ -294,79 +304,70 @@ async def update_goal(
     goal: GoalUpdate,
     current_user: User = Depends(get_current_user)
 ):
-    conn = sqlite3.connect('instance/database.sqlite')
-    c = conn.cursor()
-    
-    db_goal = c.execute(
-        'SELECT * FROM goals WHERE id = ? AND user_id = ?', 
-        (goal_id, current_user.id)
-    ).fetchone()
+    db_goal = db_session.query(Goal)\
+        .filter_by(id=goal_id)\
+        .filter_by(user_id=current_user.id)\
+        .first()
     
     if not db_goal:
-        conn.close()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Goal not found"
         )
     
-    title = goal.title or db_goal[2]
-    status = goal.status or db_goal[4]
+    title = goal.title or db_goal.title
+    status = goal.status or db_goal.status
     
     try:
-        c.execute(
-            'UPDATE goals SET title = ?, status = ? WHERE id = ?',
-            (title, status, goal_id)
-        )
-        conn.commit()
+        db_goal.title = title
+        db_goal.status = status
+        db_session.commit()
         
         return {
             "message": "Goal updated successfully",
             "goal": {
-                "id": goal_id,
+                "id": db_goal.id,
                 "title": title,
                 "status": status
             }
         }
     except Exception as e:
-        conn.rollback()
+        db_session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-    finally:
-        conn.close()
 
 @app.delete("/delete-goal/{goal_id}", response_model=dict)
 async def delete_goal(
     goal_id: int,
     current_user: User = Depends(get_current_user)
 ):
-    conn = sqlite3.connect('instance/database.sqlite')
-    c = conn.cursor()
+    db_goal = db_session.query(Goal)\
+        .filter_by(id=goal_id)\
+        .filter_by(user_id=current_user.id)\
+        .first()
+    
+    if not db_goal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Goal not found or not authorized"
+        )
     
     try:
-        c.execute(
-            'DELETE FROM goals WHERE id = ? AND user_id = ?',
-            (goal_id, current_user.id)
-        )
-        
-        if c.rowcount == 0:
-            conn.close()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Goal not found or not authorized"
-            )
-        
-        conn.commit()
+        db_session.delete(db_goal)
+        db_session.commit()
         return {"message": "Goal deleted successfully"}
     except Exception as e:
-        conn.rollback()
+        db_session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-    finally:
-        conn.close()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    db_session.remove()
 
 if __name__ == "__main__":
     init_db()

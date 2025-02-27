@@ -20,7 +20,8 @@ interface Credentials {
   password: string;
 }
 
-// Deprecated
+
+//compare with login in AuthContext.tsx
 export const loginUser = async (credentials: Credentials): Promise<User> => {
   const { data } = await api.post<AuthResponse>('/token', credentials);
   if (data.token) {
